@@ -1,4 +1,5 @@
-import App from "../../App";
+import TodayTracker from "../components/TodayTracker";
+
 export default function Today() {
-  return <App screen="today" />;
+  return <TodayTracker />;
 }
