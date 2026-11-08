@@ -321,7 +321,13 @@ export async function analyzeReport(
       }
     }
     return ensureProposalIsScoped(input, result.finalOutput);
-  } catch {
+  } catch (error) {
+    // Provider status is useful for diagnosing authentication and quota failures
+    // without logging prompts, images, credentials, or provider response text.
+    const e = error as { status?: unknown; code?: unknown; cause?: { status?: unknown; code?: unknown } };
+    const status = typeof e?.status === "number" ? e.status : typeof e?.cause?.status === "number" ? e.cause.status : undefined;
+    const code = typeof e?.code === "string" && /^[a-z0-9_]{1,60}$/i.test(e.code) ? e.code : undefined;
+    console.error("OpenAI agent request failed", { status, code });
     fail("UNAVAILABLE", "Live agent inference failed or returned invalid output", 503);
   }
 }
