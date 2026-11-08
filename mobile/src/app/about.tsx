@@ -1,2 +1,1 @@
-import App from '../../App';
-export default function About() { return <App screen="today" />; }
+export { AboutScreen as default } from '../components/EntryScreens';

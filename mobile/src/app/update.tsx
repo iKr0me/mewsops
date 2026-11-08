@@ -1,4 +1,1 @@
-import App from "../../App";
-export default function Update() {
-  return <App screen="update" />;
-}
+export { ReportScreen as default } from '../components/EntryScreens';

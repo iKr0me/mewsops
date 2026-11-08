@@ -1,4 +1,1 @@
-import App from "../../App";
-export default function Tasks() {
-  return <App screen="tasks" />;
-}
+export { default } from '../screens/NeedsScreen';
