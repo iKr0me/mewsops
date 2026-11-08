@@ -34,7 +34,7 @@ Start a volunteer session with `{"persona":"volunteer"}`. Submit this JSON to /a
 }
 ```
 
-For photos, upload first and include the returned IDs. Optional report fields are demoLocationId and observedAt. The original report text and immediate unverified alert survive processing failures. Switch to the staff persona in a separate browser profile, list reports, then POST the process command for the returned ID. The default fixture leaves cat identity unresolved. When the agent supplies a candidate and the backend creates a review, a staff decision looks like:
+For photos, upload first and include the returned IDs. Staff can retrieve the full sanitized PNG. If it exceeds the agent's size limit, analysis uses a reduced PNG with the same evidence ID. A cat suggestion requires both a submitted photo citation and a vetted description for that candidate. Optional report fields are demoLocationId and observedAt. The original report text and immediate unverified alert survive processing failures. Switch to the staff persona in a separate browser profile, list reports, then POST the process command for the returned ID. The default fixture leaves cat identity unresolved. When the agent supplies a candidate and the backend creates a review, a staff decision looks like:
 
 ```json
 {

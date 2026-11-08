@@ -1,6 +1,7 @@
 import type { AnalyzeReportInput } from "../contracts/agent.js";
 import type { Db } from "../db/index.js";
 import type { Actor, AgentProposal, Report } from "../domain/index.js";
+import sharp from "sharp";
 import { loadMedia } from "./media.js";
 
 export async function prepareAnalysis(
@@ -27,10 +28,25 @@ export async function prepareAnalysis(
   const images: AnalyzeReportInput["images"] = [];
   for (const evidenceId of report.mediaIds) {
     const bytes = await loadMedia(db, uploadDir, actor, evidenceId);
+    // PR #2 accepts 8,000,000 base64 characters (6,000,000 bytes) per image.
+    // Keep the full sanitized evidence for staff and downsample only the agent copy.
+    const agentBytes =
+      bytes.length <= 6_000_000
+        ? bytes
+        : await sharp(bytes)
+            .resize({
+              width: 1024,
+              height: 1024,
+              fit: "inside",
+              withoutEnlargement: true,
+            })
+            .toColourspace("srgb")
+            .png()
+            .toBuffer();
     images.push({
       evidenceId,
       mimeType: "image/png",
-      dataBase64: bytes.toString("base64"),
+      dataBase64: agentBytes.toString("base64"),
     });
   }
   return {
@@ -53,7 +69,11 @@ export async function prepareAnalysis(
 export function proposalGuard(input: AnalyzeReportInput) {
   const reportId = input.reportId;
   const media = new Set(input.images.map((i) => i.evidenceId));
-  const cats = new Set(input.context.catCandidates.map((c) => c.catId));
+  const cats = new Set(
+    input.context.catCandidates
+      .filter((c) => c.knownDescription?.trim())
+      .map((c) => c.catId),
+  );
   const colonies = new Set(
     input.context.colonyCandidates.map((c) => c.colonyId),
   );
@@ -66,7 +86,9 @@ export function proposalGuard(input: AnalyzeReportInput) {
     ];
     if (
       p.reportId !== reportId ||
-      p.catCandidates.some((c) => !cats.has(c.catId)) ||
+      p.catCandidates.some(
+        (c) => !cats.has(c.catId) || !c.evidenceIds.some((id) => media.has(id)),
+      ) ||
       p.colonyCandidates.some((c) => !colonies.has(c.colonyId)) ||
       items.some((item) =>
         item.evidenceIds.some((id) => id !== reportId && !media.has(id)),
@@ -78,7 +100,7 @@ export function proposalGuard(input: AnalyzeReportInput) {
       )
     )
       throw new Error(
-        "Proposal references evidence outside the supplied context",
+        "Proposal lacks supporting evidence in the supplied context",
       );
   };
 }

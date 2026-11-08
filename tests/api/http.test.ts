@@ -1,6 +1,8 @@
 import { afterEach, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import type { AddressInfo } from "node:net";
 import { createApiServer } from "../../src/app.js";
@@ -57,6 +59,10 @@ async function app(
   }
   return { req, login, url, db };
 }
+const samplePng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEklEQVQImWNYtfvMqt1nGCAUADziCMUJIqEUAAAAAElFTkSuQmCC",
+  "base64",
+);
 const input = {
   text: "Limping cat by the gate",
   selectedColonyId: "colony-1",
@@ -64,32 +70,44 @@ const input = {
   mediaIds: [],
 };
 it("takes a persisted volunteer report through scoped staff review and idempotent approval", async () => {
-  const { req, login } = await app(async (input, deps) => ({
-    ...((await syntheticFixture(input, deps)) as object),
-    catCandidates: [
-      {
-        catId: "cat-1",
-        evidenceIds: [input.textEvidenceId],
-        reasons: ["Scripted approval test"],
-        contradictions: [],
-      },
-    ],
-  }));
+  const { req, login, url } = await app(
+    async (input, deps) => ({
+      ...((await syntheticFixture(input, deps)) as object),
+      catCandidates: [
+        {
+          catId: "cat-1",
+          evidenceIds: [input.images[0].evidenceId],
+          reasons: ["Scripted approval test"],
+          contradictions: [],
+        },
+      ],
+    }),
+    true,
+    new Map([["cat-1", "Synthetic test markings"]]),
+  );
   const volunteer = await login("volunteer"),
     staff = await login("staff");
+  const upload = await fetch(url + "/media", {
+    method: "POST",
+    headers: { cookie: volunteer, "content-type": "image/png" },
+    body: new Uint8Array(samplePng),
+  });
+  expect(upload.status).toBe(201);
+  const submission = { ...input, mediaIds: [(await upload.json()).data.id] };
   expect((await req("/reviews")).status).toBe(401);
   expect(
     (await req("/reports", volunteer, { ...input, role: "staff" })).status,
   ).toBe(400);
   const { data: report } = await (
-    await req("/reports", volunteer, input)
+    await req("/reports", volunteer, submission)
   ).json();
   expect(report.status).toBe("received");
-  expect((await (await req("/reports", volunteer, input)).json()).data.id).toBe(
-    report.id,
-  );
   expect(
-    (await req("/reports", volunteer, { ...input, text: "changed" })).status,
+    (await (await req("/reports", volunteer, submission)).json()).data.id,
+  ).toBe(report.id);
+  expect(
+    (await req("/reports", volunteer, { ...submission, text: "changed" }))
+      .status,
   ).toBe(409);
   expect((await req("/reports", volunteer)).status).toBe(403);
   expect((await (await req("/reports", staff)).json()).data).toContainEqual(
@@ -192,10 +210,7 @@ it("validates uploads and enforces owner and current assignment on private reads
       headers: { cookie, "content-type": contentType },
       body: new Uint8Array(body),
     });
-  const png = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
-    "base64",
-  );
+  const png = samplePng;
   expect((await upload(Buffer.from("bad"))).status).toBe(400);
   expect((await upload(png, "image/jpeg")).status).toBe(400);
   expect((await upload(Buffer.alloc(5 * 1024 * 1024 + 1))).status).toBe(400);
@@ -328,3 +343,86 @@ it("links two different uploaded images to one counted cat after staff approval"
   );
   expect(await count()).toBe(before);
 });
+it("keeps full private evidence when an uploaded JPEG expands beyond the agent PNG limit", async () => {
+  const sharp = createRequire(
+    new URL("../../src/api/package.json", import.meta.url),
+  )("sharp");
+  const side = 1800;
+  const jpeg = await sharp(randomBytes(side * side * 3), {
+    raw: { width: side, height: side, channels: 3 },
+  })
+    .jpeg({ quality: 80 })
+    .toBuffer();
+  let captured: Parameters<AnalyzeReport>[0] | undefined;
+  const { req, url, login } = await app(async (report, deps) => {
+    captured = report;
+    return syntheticFixture(report, deps);
+  });
+  const volunteer = await login("volunteer"),
+    staff = await login("staff");
+  const uploaded = await fetch(url + "/media", {
+    method: "POST",
+    headers: { cookie: volunteer, "content-type": "image/jpeg" },
+    body: new Uint8Array(jpeg),
+  });
+  expect(uploaded.status).toBe(201);
+  const mediaId = (await uploaded.json()).data.id;
+  const original = Buffer.from(
+    await (await req("/media/" + mediaId, staff)).arrayBuffer(),
+  );
+  expect(original.length).toBeGreaterThan(6_000_000);
+  expect((await sharp(original).metadata()).width).toBe(side);
+  const { data: report } = await (
+    await req("/reports", volunteer, { ...input, mediaIds: [mediaId] })
+  ).json();
+  expect(
+    (await req("/reports/" + report.id + "/process", staff, undefined, "POST"))
+      .status,
+  ).toBe(200);
+  const image = captured!.images[0];
+  expect(image.evidenceId).toBe(mediaId);
+  expect(image.dataBase64.length).toBeLessThanOrEqual(8_000_000);
+  expect(
+    (await sharp(Buffer.from(image.dataBase64, "base64")).metadata()).format,
+  ).toBe("png");
+});
+
+it.each([false, true])(
+  "rejects a cat suggestion lacking a reference description or photo citation (has description: %s)",
+  async (described) => {
+    const { req, url, login } = await app(
+      async (report, deps) => ({
+        ...((await syntheticFixture(report, deps)) as object),
+        catCandidates: [
+          {
+            catId: "cat-1",
+            evidenceIds: [
+              described ? report.textEvidenceId : report.images[0].evidenceId,
+            ],
+            reasons: ["Test unsupported match"],
+            contradictions: [],
+          },
+        ],
+      }),
+      true,
+      described ? new Map([["cat-1", "Synthetic test markings"]]) : undefined,
+    );
+    const staff = await login("staff");
+    const uploaded = await fetch(url + "/media", {
+      method: "POST",
+      headers: { cookie: staff, "content-type": "image/png" },
+      body: new Uint8Array(samplePng),
+    });
+    const mediaId = (await uploaded.json()).data.id;
+    const { data: report } = await (
+      await req("/reports", staff, { ...input, mediaIds: [mediaId] })
+    ).json();
+    const path = "/reports/" + report.id;
+    expect(
+      (await req(path + "/process", staff, undefined, "POST")).status,
+    ).toBe(503);
+    const { data } = await (await req(path, staff)).json();
+    expect(data.reviews).toEqual([]);
+    expect(data.alerts[0].level).toBe("same_day_review");
+  },
+);
