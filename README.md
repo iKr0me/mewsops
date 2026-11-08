@@ -1,34 +1,66 @@
-# MewsOps
+<p align="center"><img src="docs/readme-assets/banner.svg" alt="MewsOps — Mangrove Mews colony tracker" width="100%"></p>
 
-MewsOps gives Mangrove Mews volunteers a phone form for reporting a sighting, photo and location. Rescue staff see feeding visits and urgent care needs on the colony map and can link two sightings to one cat. All demo accounts, locations, messages and photos are fictional.
+<p align="center"><strong>A clearer picture of every colony, every day.</strong><br>Turn fictional field reports into a shared, human-reviewed cat colony tracker.</p>
 
-## Run the connected demo
+<h3 align="center"><a href="https://mewsops-cat-tracker.vercel.app">🐾 Open the live demo</a></h3>
 
-Use Node.js 24 or 26 on the laptop. In a checkout containing the connected tracker, install the two locked dependency sets once:
+<p align="center"><code>CODEX</code> · <code>OPENAI AGENTS SDK</code> · <code>VERCEL</code> · <code>FICTIONAL DATA</code></p>
+
+---
+
+## 01 / Enter the tracker
+
+Open the [live tracker](https://mewsops-cat-tracker.vercel.app) on a phone or computer. Choose a fictional team member and enter their demo code:
+
+| Team member | Role | Demo code |
+| --- | --- | --- |
+| Luz | Feeder | `F06DDADF8F8E` |
+| Nico | Volunteer | `709AFB4ED19C` |
+| Beatriz | Founder | `3CCA11F5FD0F` |
+
+> **Demo data only.** These accounts are public and share the same fictional dataset. Anyone with the codes can change the demo. Never enter real rescue information.
+
+## 02 / Follow a report
+
+1. As **Luz**, open **Report**, choose **Use feeding + limp sample**, and send the note, fictional location and photo.
+2. As **Nico**, send **Use second sighting** with another synthetic photo.
+3. As **Beatriz**, open Nico’s update, compare the two sightings and confirm the match to **Marigold**.
+4. Return to Laundry Lane’s colony details: the census stays at **7 cats**, and the injury alert remains open for follow-up.
+
+![Beatriz compares two fictional sightings in the tracker](docs/readme-assets/tracker-review.png)
+
+## 03 / The mission
+
+Small rescue teams juggle updates across messages, photos, notebooks and spreadsheets. Urgent cases can get buried, and different volunteers can report the same cat twice. MewsOps brings those reports together so the rescue can see what each colony needs.
+
+Mangrove Mews is a fictional rescue created for the Codex Hackathon for Miami’s Non-Profits. Its challenge reflects real problems shared by South Florida nonprofits.
+
+## 04 / What the tracker does
+
+- **Colony overview:** See confirmed cats, fixed and awaiting-TNR counts, veterinary concerns and the last feeding visit.
+- **Field reporting:** Send a note, photo and deliberately shared fictional location from a phone browser.
+- **Human review:** Compare evidence and confirm cat identity before sightings are linked.
+- **Care alerts:** Surface reported injury, pregnancy, kittens and feeder coverage concerns.
+- **Shared workspace:** Separate fictional accounts access reports through the same hosted tracker.
+
+## 05 / How it works
+
+The web interface talks to a Node.js API backed by a shared Turso database and private Vercel Blob storage. The OpenAI Agents SDK can analyze submitted evidence when a valid API key is configured. Reports remain available for manual review if analysis is unavailable or fails. Codex supported development and integration.
+
+The demo uses fictional locations and deliberately submitted reports. It does not pull messages from live WhatsApp chats. Shared public demo codes are for this synthetic demonstration, not a production rescue deployment.
+
+## 06 / Run locally
+
+Use Node.js 24 or 26, then install the locked dependencies and start a fresh connected demo:
 
 ```sh
 npm ci
 npm ci --prefix src/api
-```
-
-Start a fresh recording session on your team's private Wi-Fi or hotspot:
-
-```sh
 npm run tracker -- --lan --fresh
 ```
 
-Keep this terminal running. Open its **Laptop** URL on the computer and its **Phone** URL in Chrome or Samsung Internet on the Samsung. Both devices must be on the same network. The app runs in the browser; it requires no phone installation. The terminal prints a different access code for each of the three fictional team members. Complete sign-in before recording.
+Keep the terminal running and open the printed URL. The terminal supplies temporary codes for each fictional user. Add an `OPENAI_API_KEY` to the laptop environment or an ignored `.env.local` file to enable live analysis; without a working key, reports remain available for manual review. See the [recording walkthrough](mobile/README.md#record-the-demo) for more details.
 
-Port **4174** serves the connected interface, API and private photos. A separate backend on **3001** can keep running for its own tests. If venue Wi-Fi blocks device-to-device traffic, connect both devices through a private hotspot, restart the tracker and use the new phone URL. Omit `--fresh` to use the persistent default demo database. Each use of `--fresh` creates a separate database and preserves previous takes.
+---
 
-## Run with live OpenAI analysis
-
-The tracker reads `OPENAI_API_KEY` from the laptop environment or a local `.env.local` or `.env` file. If the key is already in another checkout, point the launcher at that file. For Atticus's existing setup:
-
-```sh
-DOTENV_CONFIG_PATH="/Users/atticuscoffey/Documents/Codex/2026-11-07/request-to-connect/work/mewsops/.env.local" MEWSOPS_AGENT_MODE=live npm run tracker -- --lan --fresh
-```
-
-Only the laptop needs the key. A submitted fictional report is saved immediately. Its photo and note are analyzed in the background using the OpenAI Agents SDK. Open the saved report to see its actual analysis outcome. **Live OpenAI analysis** indicates a completed live call; **Analysis failed** offers staff a retry. With no key, the tracker defaults to manual review. The explicit `MEWSOPS_AGENT_MODE=fixture` option runs deterministic test analysis.
-
-Follow the [four-shot recording guide](mobile/README.md#record-the-demo). To check the code, run `npm run typecheck`, `npm test` and `npm --prefix mobile run check`. The [API contract](docs/api-contract.md) and [agent handoff](docs/agent-intelligence.md) describe the underlying report and review services.
+<p align="center"><strong>MANGROVE MEWS / COLONY TRACKER</strong><br><sub>Built for the Codex Hackathon for Miami’s Non-Profits</sub></p>

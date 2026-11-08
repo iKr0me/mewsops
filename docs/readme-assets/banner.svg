@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-label="MewsOps Mangrove Mews colony tracker">
+<rect width="1200" height="300" rx="22" fill="#101e2b"/>
+<path d="M0 60H1200M0 120H1200M0 180H1200M0 240H1200M120 0V300M240 0V300M360 0V300M480 0V300M600 0V300M720 0V300M840 0V300M960 0V300M1080 0V300" stroke="#294556" stroke-width="1" opacity=".6"/>
+<path d="M785 238C850 220 847 132 916 143S1040 125 1095 49M749 93C826 65 895 93 945 51" fill="none" stroke="#457280" stroke-width="2" opacity=".8"/>
+<g fill="#f6a14a" stroke="#101e2b" stroke-width="5"><circle cx="903" cy="145" r="10"/><circle cx="1047" cy="104" r="10"/><circle cx="840" cy="217" r="10"/></g>
+<circle cx="1075" cy="210" r="50" fill="none" stroke="#65bcb1" stroke-width="2"/><path d="M1048 197l9-23 11 13 14-1 11-12 8 23-1 24c-8 20-44 20-52 0z" fill="#f6a14a"/><circle cx="1066" cy="207" r="3" fill="#101e2b"/><circle cx="1084" cy="207" r="3" fill="#101e2b"/>
+<text x="70" y="69" fill="#71bcb5" font-family="Arial,sans-serif" font-size="17" font-weight="bold" letter-spacing="5">MANGROVE MEWS  /  MIAMI CAT RESCUE</text>
+<text x="70" y="164" fill="#f6f3e9" font-family="Arial,sans-serif" font-weight="900" font-size="82" letter-spacing="3">MEWS<tspan fill="#f6a14a">OPS</tspan></text>
+<text x="74" y="208" fill="#bbd2d4" font-family="Arial,sans-serif" font-size="22" letter-spacing="2">COLONY TRACKER  ·  CARE IN FOCUS</text>
+<text x="74" y="258" fill="#6cbab0" font-family="Arial,sans-serif" font-size="14" letter-spacing="3">FICTIONAL TRAINING SECTOR  //  SYSTEM ONLINE</text>
+</svg>
