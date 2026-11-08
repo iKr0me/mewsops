@@ -41,3 +41,10 @@ main:has(.workspace){padding-top:6px;padding-bottom:calc(82px + env(safe-area-in
 .urgentCare .issue{color:#ffc6cd;background:#38262f;border-color:#80545f;border-left-color:#ff5367}
 
 .map .canvas{will-change:transform}.canvas>img{filter:none}.mapPins{position:absolute;inset:0;pointer-events:none}.mapPins .pin{pointer-events:auto}
+
+#reportForm input[type=checkbox]{width:1.2rem;height:1.2rem;min-height:0;vertical-align:middle;accent-color:#9ddbd2}
+.analysisEvidence{margin:14px 0;padding:10px 12px;border:1px solid #476174;border-radius:6px}
+.analysisEvidence summary{font-weight:650;cursor:pointer}
+.analysisEvidence ul{margin:8px 0 0;padding-left:20px}
+.analysisEvidence li+li{margin-top:8px}
+.analysisEvidence small{color:#bed3d8}
