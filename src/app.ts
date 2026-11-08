@@ -12,6 +12,7 @@ import {
 } from "./db/index.js";
 import { createServices, staff, fail } from "./domain/index.js";
 import { actorFromVerifiedSession } from "./api/session.js";
+import { createTrackerRoutes, type TrackerOptions } from "./tracker/routes.js";
 import { demoAnalyzer, readDemoDescriptions } from "./api/demo-runtime.js";
 import { errorEnvelope } from "./api/errors.js";
 import {
@@ -54,6 +55,7 @@ export interface ApiOptions {
   db: Db;
   uploadDir: string;
   demo?: boolean;
+  tracker?: TrackerOptions;
   analyzeReport?: AnalyzeReport;
   timeoutMs?: number;
   vettedDemoDescriptions?: ReadonlyMap<string, string>;
@@ -71,8 +73,13 @@ export function createApiServer(options: ApiOptions) {
     options.analyzeReport,
     options.timeoutMs ?? 15000,
     uploadDir,
-    options.demo ? options.vettedDemoDescriptions : undefined,
+    options.demo || options.tracker ? options.vettedDemoDescriptions : undefined,
   );
+  if (options.tracker?.analysisMode === "live" && options.analyzeReport === syntheticFixture)
+    throw new Error("Live tracker mode requires the live analysis adapter");
+  if (options.tracker && options.tracker.analysisMode !== "manual" && !options.analyzeReport)
+    throw new Error("Configure an analysis adapter or select manual tracker mode");
+  const tracker = options.tracker && createTrackerRoutes(db, options.tracker, processReport, json);
   const sessions = new Map<string, { userId: string; expires: number }>();
   function project(report: ReturnType<typeof services.getReport>) {
     return {
@@ -150,6 +157,8 @@ export function createApiServer(options: ApiOptions) {
           : await options.verifiedSubject?.(req);
       if (!subject) return fail("UNAUTHORIZED", "Session required", 401);
       const actor = actorFromVerifiedSession(db, subject);
+      if (tracker && path.startsWith("/api/tracker/"))
+        return await tracker(req, res, path, actor);
       const [, prefix, resource, id, action, ...extra] = path.split("/");
       if (prefix !== "api" || extra.length)
         return fail("NOT_FOUND", "Unknown endpoint", 404);
