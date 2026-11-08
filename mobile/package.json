@@ -1,0 +1,11 @@
+{
+  "name": "mewsops-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node host/start.mjs",
+    "build": "node host/build.mjs",
+    "check": "node --check web/app.js && node --check host/start.mjs && node --check host/demo-build.mjs"
+  }
+}
