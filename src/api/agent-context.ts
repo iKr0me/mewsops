@@ -56,10 +56,12 @@ export async function prepareAnalysis(
     ...(report.observedAt && { observedAt: report.observedAt }),
     images,
     context: {
-      colonyCandidates: [colony],
+      // Drivers may attach metadata to query results; the agent accepts only
+      // the explicitly scoped fields, not database-specific properties.
+      colonyCandidates: [{ colonyId: colony.colonyId, name: colony.name }],
       catCandidates: cats.map((cat) => {
         const knownDescription = descriptions?.get(cat.catId)?.trim();
-        return knownDescription ? { ...cat, knownDescription } : cat;
+        return { catId: cat.catId, colonyId: cat.colonyId, ...(knownDescription && { knownDescription }) };
       }),
     },
   };

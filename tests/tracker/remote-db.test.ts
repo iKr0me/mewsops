@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createRemoteDatabase } from "../../src/db/remote.js";
 import { createTrackerStore } from "../../src/tracker/store.js";
+import { trackerDescriptions } from "../../src/tracker/store.js";
+import { createServices } from "../../src/domain/index.js";
+import { actorFromVerifiedSession } from "../../src/api/session.js";
+import { prepareAnalysis } from "../../src/api/agent-context.js";
+import { analyzeReport } from "../../src/agent/index.js";
 
 describe("libSQL adapter", () => {
   it("enables integrity checks and seeds the shared tracker", () => {
@@ -16,5 +21,16 @@ describe("libSQL adapter", () => {
     } finally {
       db.close();
     }
+  });
+  it("passes only supported fields from libSQL into the agent", async () => {
+    const db = createRemoteDatabase(":memory:", "test");
+    try {
+      createTrackerStore(db);
+      const actor = actorFromVerifiedSession(db, {userId: "beatriz"});
+      const id = (db.prepare("SELECT id FROM reports LIMIT 1").get() as {id: string}).id;
+      const report = createServices(db).getReport(actor, id);
+      const input = await prepareAnalysis(db, "unused", actor, report, trackerDescriptions);
+      expect((await analyzeReport(input, {mode:"fixture"})).reportId).toBe(id);
+    } finally { db.close(); }
   });
 });
