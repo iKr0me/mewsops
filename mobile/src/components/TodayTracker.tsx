@@ -1,47 +1,64 @@
 import { useEffect, useState } from "react";
-import { AccessibilityInfo, Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { AccessibilityInfo, Animated, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFonts, VT323_400Regular } from "@expo-google-fonts/vt323";
 import MiamiMap from "./MiamiMap";
 
-const C = { bg: "#FFF9EF", panel: "#F8E5D2", ink: "#292725", muted: "#716255", ginger: "#AC4C19", slate: "#65554A", concern: "#A43A2B", line: "#E8D9C8" };
-const displayFont = Platform.select({ android: "sans-serif-black", ios: "System", default: "system-ui" });
-const labelFont = Platform.select({ android: "monospace", ios: "Menlo", default: "monospace" });
-const colonies = [
-  { name: "Laundry Lane", cats: 7, label: "Reported limping", note: "A feeder noticed a limping calico. Identity still needs review." },
-  { name: "Banyan Corner", cats: 5, label: "Feeder coverage", note: "A volunteer reported a gap in feeder coverage. A visit is not yet confirmed." },
-  { name: "Little Harbor", cats: 4, label: "No concern recorded", note: "No open concern in this fictional example. Last feeding time is unknown." },
+const C = { cream: "#F9F6EC", paper: "#FFFCF4", ink: "#1F1D1A", ginger: "#E9A15D", orange: "#A74C23", muted: "#6E6256", line: "#DED7C7" };
+const mono = Platform.select({ android: "monospace", ios: "Menlo", default: "monospace" });
+const mascotImage = require("../../assets/fictional-black-cat.png");
+const records = [
+  { id: "R01", title: "LIMP REPORTED", colony: "Laundry Lane", category: "Reported concern", detail: "A volunteer reported a limping cat. Identity remains unresolved; this is not a diagnosis.", status: "Identity needs review", kind: "cat" },
+  { id: "R02", title: "FEEDER CHECK", colony: "Banyan Corner", category: "Coverage concern", detail: "A volunteer reported a gap in feeder coverage. Last feeding time is unknown; no visit has been confirmed.", status: "Feeding time unknown", kind: "bowl" },
+  { id: "C03", title: "LITTLE HARBOR", colony: "Colony record", category: "4 confirmed cats · demo", detail: "This fictional record has four confirmed cats and no recorded open concern. It does not establish current wellbeing.", status: "No concern recorded", kind: "colony" },
 ] as const;
-
-function PixelSpark() {
-  return <View style={s.pixelSpark} accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-    {[[7, 0], [0, 7], [7, 7], [14, 7], [7, 14]].map(([left, top]) => <View key={`${left}-${top}`} style={[s.pixel, { left, top }]} />)}
+const navigation = [
+  { label: "TODAY", path: "/", icon: "home" },
+  { label: "COLONIES", path: "/colonies", icon: "map" },
+  { label: "REPORT", path: "/update", icon: "plus" },
+  { label: "NEEDS", path: "/tasks", icon: "needs" },
+  { label: "CATS", path: "/cats", icon: "cat" },
+] as const;
+type IconName = typeof navigation[number]["icon"];
+const glyphs: Record<IconName, string[]> = {
+  home: ["0001000", "0011100", "0110110", "1100011", "0100010", "0101010", "0111110"],
+  map: ["1100011", "1011101", "1010101", "1010101", "1010101", "1011101", "1100011"],
+  plus: ["0001000", "0001000", "0001000", "1111111", "0001000", "0001000", "0001000"],
+  needs: ["1111111", "1000001", "1011101", "1000001", "1011101", "1000001", "1111111"],
+  cat: ["1100011", "1110111", "1000001", "1010101", "1000001", "0101010", "0011100"],
+};
+function PixelIcon({ name, size = 21 }: { name: IconName; size?: number }) {
+  const unit = size / 7;
+  return <View style={{ width: size, height: size }} accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    {glyphs[name].flatMap((row, y) => row.split("").map((cell, x) => cell === "1" ? <View key={`${x}-${y}`} style={{ position: "absolute", left: x * unit, top: y * unit, width: unit, height: unit, backgroundColor: C.ink }} /> : null))}
   </View>;
 }
-
-function CatMascot() {
-  return <View accessible accessibilityLabel="Sleepy round black cat mascot" style={s.cat}>
-    <View style={s.catShadow} />
-    <View style={[s.ear, { left: 12, transform: [{ rotate: "-18deg" }] }]} />
-    <View style={[s.ear, { right: 12, transform: [{ rotate: "18deg" }] }]} />
-    <View style={s.face}>
-      <View style={[s.eye, { left: 16 }]} /><View style={[s.eye, { right: 16 }]} />
-      <View style={s.nose} /><View style={[s.whisker, { left: 5 }]} /><View style={[s.whisker, { right: 5 }]} />
-      <View style={s.paw} />
-    </View>
-    <Text style={s.sleepMark}>z</Text>
+function StairAccent() {
+  return <View style={s.stairs} accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    {[0, 1, 2, 3, 4].map(index => <View key={index} style={[s.step, { left: index * 11, bottom: index * 11 }]} />)}
+  </View>;
+}
+function RecordArt({ kind }: { kind: typeof records[number]["kind"] }) {
+  if (kind === "cat") return <Image source={mascotImage} style={s.photo} resizeMode="cover" accessible accessibilityLabel="Original sleepy black cat mascot illustration, not report evidence" />;
+  if (kind === "bowl") return <View style={[s.art, s.bowlArt]} accessible accessibilityLabel="Illustration of a feeding bowl, no report photo">
+    <View style={s.bowlRim} /><View style={s.bowl} /><View style={s.bowlFoot} /><View style={s.foodOne} /><View style={s.foodTwo} />
+  </View>;
+  return <View style={[s.art, s.colonyArt]} accessible accessibilityLabel="Illustrated fictional colony, not a map location">
+    <View style={s.houseRoof} /><View style={s.house} /><View style={s.door} /><View style={s.houseWindow} />
   </View>;
 }
 
 export default function TodayTracker() {
-  const [selected, setSelected] = useState(0);
+  const [fontsLoaded, fontError] = useFonts({ VT323_400Regular });
+  const [selected, setSelected] = useState<string | null>(null);
   const [reducedMotion, setReducedMotion] = useState(true);
   const [motionPaused, setMotionPaused] = useState(false);
-  const [greeting] = useState(() => new Animated.Value(0));
+  const [float] = useState(() => new Animated.Value(0));
   const { width, fontScale } = useWindowDimensions();
   const wide = width >= 900;
-  const colony = colonies[selected];
+  const display = { fontFamily: fontsLoaded ? "VT323_400Regular" : mono };
 
   useEffect(() => {
     let active = true;
@@ -50,80 +67,76 @@ export default function TodayTracker() {
     return () => { active = false; subscription.remove(); };
   }, []);
   useEffect(() => {
-    if (reducedMotion || motionPaused) { greeting.setValue(0); return; }
+    if (reducedMotion || motionPaused) { float.setValue(0); return; }
     const animation = Animated.loop(Animated.sequence([
-      Animated.timing(greeting, { toValue: -8, duration: 1200, useNativeDriver: true }),
-      Animated.timing(greeting, { toValue: 0, duration: 1200, useNativeDriver: true }),
-      Animated.delay(1200),
+      Animated.timing(float, { toValue: -7, duration: 1400, useNativeDriver: true, isInteraction: false }),
+      Animated.timing(float, { toValue: 0, duration: 1400, useNativeDriver: true, isInteraction: false }),
+      Animated.delay(700),
     ]));
     animation.start();
     return () => animation.stop();
-  }, [greeting, reducedMotion, motionPaused]);
+  }, [float, reducedMotion, motionPaused]);
 
-  return <SafeAreaView style={s.safe} edges={["top", "left", "right", "bottom"]}>
+  return <SafeAreaView style={s.safe} edges={["top", "bottom", "left", "right"]}>
     <StatusBar style="dark" />
-    <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+    <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false}>
       <View style={s.header}>
-        <View style={s.brand}><PixelSpark /><Text style={s.brandText}>mangrove mews</Text></View>
-        <Pressable accessibilityRole="button" accessibilityLabel="About Mangrove Mews" onPress={() => router.push("/about")} style={({ pressed }) => [s.about, pressed && s.pressed]}><Text style={s.aboutText}>About ↗</Text></Pressable>
+        <View style={s.brand}><PixelIcon name="cat" size={30} /><Text style={[s.brandName, display]}>MEWS</Text></View>
+        <Pressable accessibilityRole="button" accessibilityLabel="About Mangrove Mews" onPress={() => router.push("/about")} style={({ pressed }) => [s.menu, pressed && s.pressed]}><Text style={s.menuLabel}>ABOUT</Text><View style={s.menuSquare}><View style={s.menuLine} /><View style={s.menuLine} /><View style={s.menuLine} /></View></Pressable>
       </View>
-      <View style={[s.greeting, (width < 350 || fontScale > 1.3) && s.greetingStacked]}>
-        <View style={s.titleBlock}><Text style={s.eyebrow}>MIAMI / CAT CARE CLUB</Text><Text accessibilityRole="header" style={[s.title, width < 400 && s.compactTitle]}>LITTLE PAWS.{'\n'}BIG PLANS.</Text></View>
-        <View style={s.mascotColumn}>
-          <Animated.View style={{ width: 112, height: 116, alignItems: "center", justifyContent: "center", transform: [{ translateY: greeting }, { rotate: greeting.interpolate({ inputRange: [-8, 0], outputRange: ["-4deg", "2deg"] }) }, { scale: 1.3 }] }}><CatMascot /></Animated.View>
-          {!reducedMotion && <Pressable accessibilityRole="button" accessibilityLabel={motionPaused ? "Play mascot animation" : "Pause mascot animation"} onPress={() => setMotionPaused(value => !value)} style={s.motionControl}><Text style={s.motionLabel}>{motionPaused ? "Play cat" : "Pause cat"}</Text></Pressable>}
-        </View>
-      </View>
-      <Text style={s.purpose}>Report a sighting. Check colony needs. Let the team review cat identities.</Text>
-      <View style={s.todayLine}><Text style={s.todayTitle}>TODAY’S FIELDNOTES</Text><Text style={s.demo}>Fictional demo · not live</Text></View>
-      <View style={[s.main, wide && s.mainWide]}>
-        <View style={[s.needsColumn, wide && s.needsWide]}>
-          <View style={s.sectionHeading}><Text accessibilityRole="header" style={s.sectionTitle}>On the care list</Text><Text style={s.needCount}>2 needs</Text></View>
-          <Pressable accessibilityRole="button" accessibilityLabel="View Laundry Lane reported limping concern" onPress={() => setSelected(0)} accessibilityState={{ selected: selected === 0 }} style={({ pressed }) => [s.need, selected === 0 && s.selectedNeed, pressed && s.pressed]}>
-            <View style={[s.needIcon, { backgroundColor: "#FBE2D8" }]}><Text style={[s.iconText, { color: C.concern }]}>!</Text></View>
-            <View style={s.needBody}><Text style={s.urgentLabel}>REPORTED CONCERN</Text><Text style={s.needTitle}>A calico is limping</Text><Text style={s.needMeta}>Laundry Lane · example report</Text><Text style={s.identity}>?  Identity awaiting review</Text>{selected === 0 && <Text style={s.cardDetail}>{colonies[0].note}</Text>}</View><Text style={s.chevron}>›</Text>
+      <View style={[s.columns, wide && s.columnsWide]}>
+        <View style={[s.listColumn, wide && s.listWide]}>
+          <View style={s.hero}>
+            <View style={s.heroText}><Text accessibilityRole="header" style={[s.heading, display, fontScale > 1.3 && s.largeTextHeading]}>NEEDED{`\n`}<Text style={s.orange}>TODAY</Text></Text></View>
+            <View style={s.heroArt}>
+              <StairAccent />
+              <Animated.Image source={mascotImage} resizeMode="cover" accessibilityLabel="Sleepy black cat mascot illustration" style={[s.heroCat, { transform: [{ translateY: float }] }]} />
+              {!reducedMotion && <Pressable accessibilityRole="button" accessibilityLabel={motionPaused ? "Play mascot animation" : "Pause mascot animation"} onPress={() => setMotionPaused(value => !value)} style={s.motionButton}><Text style={s.motionText}>{motionPaused ? "PLAY" : "PAUSE"}</Text></Pressable>}
+            </View>
+          </View>
+          <Text style={s.purpose}>REPORT. CARE. REVIEW TOGETHER.</Text>
+          <View style={s.listMeta}><Text style={s.meta}>FICTIONAL DEMO</Text><Text style={s.meta}>2 OPEN NEEDS</Text></View>
+          {!fontsLoaded && <Text style={s.fontNotice}>{fontError ? "Pixel font unavailable · fallback shown" : "Loading pixel type…"}</Text>}
+          <View style={s.records}>
+            {records.map(item => <View key={item.id} style={s.record}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`${item.title}. ${item.colony}. ${item.status}. Show details`} accessibilityState={{ expanded: selected === item.id }} onPress={() => setSelected(selected === item.id ? null : item.id)} style={({ pressed }) => [s.recordButton, pressed && s.pressed]}>
+                <View style={s.imageColumn}><View style={s.imageFrame}><RecordArt kind={item.kind} /></View><View style={s.numberBadge}><Text style={[s.number, display]}>{item.id}</Text></View><Text style={s.illustrationLabel}>ILLUSTRATION</Text></View>
+                <View style={s.recordBody}>
+                  <Text style={[s.recordTitle, display]}>{item.title}</Text>
+                  <Text style={s.recordCategory}>{item.category}</Text>
+                  <Text style={s.location}>⌖ {item.colony}</Text>
+                  <View style={s.recordBottom}><View style={[s.tag, item.kind === "cat" && s.reviewTag]}><Text style={s.tagText}>{item.status}</Text></View><View style={s.arrowSquare}><Text style={s.arrow}>{selected === item.id ? "−" : "→"}</Text></View></View>
+                </View>
+              </Pressable>
+              {selected === item.id && <View style={s.detail}><Text style={s.detailText}>{item.detail}</Text><Text style={s.detailCaption}>Fictional example. Artwork is not evidence.</Text></View>}
+            </View>)}
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Report an update" accessibilityHint="Opens the report preview. Nothing is sent in this demo." onPress={() => router.push("/update")} style={({ pressed }) => [s.report, pressed && s.pressed]}>
+            <Text style={[s.reportText, display]}>REPORT AN UPDATE</Text><View style={s.reportArrow}><Text style={s.reportArrowText}>→</Text></View>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="View Banyan Corner feeder coverage concern" onPress={() => setSelected(1)} accessibilityState={{ selected: selected === 1 }} style={({ pressed }) => [s.need, s.secondNeed, selected === 1 && s.selectedNeed, pressed && s.pressed]}>
-            <View style={[s.needIcon, { backgroundColor: "#F7E5CE" }]}><View style={s.bowl} /></View>
-            <View style={s.needBody}><Text style={s.needTitle}>A feeding visit needs checking</Text><Text style={s.needMeta}>Banyan Corner · coverage reported</Text><Text style={s.smallNote}>Last feeding time unknown</Text>{selected === 1 && <Text style={s.cardDetail}>{colonies[1].note}</Text>}</View><Text style={s.chevron}>›</Text>
-          </Pressable>
-          <View style={s.helper}><Text style={s.helperText}>Seen something? A quick note helps the team decide what comes next.</Text></View>
+          <Text style={s.receiptNote}>Preview only · nothing is sent</Text>
         </View>
         <View style={[s.mapColumn, wide && s.mapWide]}>
-          <View style={s.mapSectionHeading}><PixelSpark /><Text accessibilityRole="header" style={s.sectionTitle}>Around Miami</Text></View>
+          <Text accessibilityRole="header" style={[s.mapTitle, display]}>OUR LITTLE{`\n`}CORNER</Text>
           <MiamiMap />
-          <Text style={s.recordLabel}>DEMO COLONY RECORDS</Text>
-          <Text style={s.recordHint}>Select a record below. Map markers are separate examples.</Text>
-          <View style={s.colonyTabs} accessibilityLabel="Choose a colony">
-            {colonies.map((item, index) => <Pressable key={item.name} accessibilityRole="button" accessibilityState={{ selected: selected === index }} onPress={() => setSelected(index)} style={({ pressed }) => [s.colonyTab, selected === index && s.activeTab, pressed && s.pressed]}><Text style={[s.tabText, selected === index && s.activeTabText]}>{item.name}</Text></Pressable>)}
-          </View>
-          <View style={s.selection} accessibilityLiveRegion="polite">
-            <View style={s.selectionTop}><Text style={s.selectionTitle}>{colony.name}</Text><Text style={s.catCount}>{colony.cats} confirmed cats</Text></View>
-            <Text style={s.selectionNote}>{colony.note}</Text>
-          </View>
+          <Text style={s.mapNote}>Illustrative map markers are separate from the demo records above.</Text>
         </View>
       </View>
     </ScrollView>
-    <View style={s.actionBar}><View style={s.actionInner}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Report an update" accessibilityHint="Opens the report screen. This demo does not send reports." onPress={() => router.push("/update")} style={({ pressed }) => [s.report, pressed && (reducedMotion ? s.pressed : s.reportPressed)]}><Text style={s.reportPlus}>+</Text><Text style={s.reportText}>REPORT AN UPDATE</Text><Text style={s.reportArrow}>↗</Text></Pressable>
-      <Text style={s.actionHint}>Demo preview · nothing is sent</Text>
+    <View style={s.bottomBar}><View style={s.nav}>
+      {navigation.map(item => <Pressable key={item.label} accessibilityRole="button" accessibilityLabel={item.label === "TODAY" ? "Today, current screen" : item.label} accessibilityState={{ selected: item.path === "/" }} onPress={() => { if (item.path !== "/") router.push(item.path); }} style={({ pressed }) => [s.navItem, item.path === "/" && s.navSelected, pressed && s.pressed]}><PixelIcon name={item.icon} /><Text style={s.navLabel}>{item.label}</Text></Pressable>)}
     </View></View>
   </SafeAreaView>;
 }
 
 const s = StyleSheet.create({
-  greetingStacked: { flexDirection: "column", alignItems: "flex-start" }, compactTitle: { fontSize: 28, lineHeight: 30 },
-  pixelSpark: { width: 20, height: 20 }, pixel: { position: "absolute", width: 6, height: 6, backgroundColor: C.ginger },
-  mascotColumn: { alignItems: "center", width: 112 }, motionControl: { minHeight: 48, minWidth: 72, justifyContent: "center", alignItems: "center" }, motionLabel: { fontFamily: labelFont, fontSize: 11, color: C.muted, textDecorationLine: "underline" },
-  purpose: { color: C.muted, fontSize: 15, lineHeight: 22, maxWidth: 490, marginBottom: 22 },
-  selectedNeed: { borderColor: C.ginger, backgroundColor: "#FFF1E2" }, cardDetail: { color: C.muted, fontSize: 14, lineHeight: 21, marginTop: 9 },
-  mapSectionHeading: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 14 }, recordLabel: { fontFamily: labelFont, color: C.ink, fontSize: 12, letterSpacing: 0.8, marginTop: 20, fontWeight: "700" }, recordHint: { color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
-  safe: { flex: 1, backgroundColor: C.bg }, content: { width: "100%", maxWidth: 1160, alignSelf: "center", paddingHorizontal: 22, paddingBottom: 24 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 8 }, brand: { flexDirection: "row", alignItems: "center", gap: 8 }, brandText: { color: C.ink, fontWeight: "900", fontSize: 16, letterSpacing: -0.7, fontFamily: displayFont }, about: { minHeight: 48, minWidth: 64, alignItems: "flex-end", justifyContent: "center" }, aboutText: { color: C.muted, fontSize: 14 },
-  greeting: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 18, paddingBottom: 4, gap: 8 }, titleBlock: { flex: 1 }, eyebrow: { color: C.ginger, fontSize: 11, letterSpacing: 1.2, fontWeight: "700", marginBottom: 10 }, title: { fontFamily: displayFont, fontSize: 34, lineHeight: 34, letterSpacing: -1.6, fontWeight: "900", color: C.ink },
-  cat: { width: 80, height: 85, marginTop: 8 }, catShadow: { position: "absolute", bottom: 2, left: 9, width: 62, height: 10, borderRadius: 20, backgroundColor: "#E8D9C8" }, ear: { position: "absolute", width: 23, height: 29, top: 10, borderTopLeftRadius: 5, borderTopRightRadius: 5, backgroundColor: "#292725" }, face: { position: "absolute", top: 23, left: 4, width: 72, height: 57, borderRadius: 32, backgroundColor: "#292725", overflow: "hidden" }, eye: { position: "absolute", top: 18, height: 7, width: 12, borderBottomWidth: 2, borderColor: "#F4E9D9", borderBottomLeftRadius: 9, borderBottomRightRadius: 9 }, nose: { position: "absolute", top: 29, left: 33, width: 6, height: 4, borderRadius: 3, backgroundColor: "#D8A88A" }, whisker: { position: "absolute", top: 30, height: 1, width: 10, backgroundColor: "#BAACA0" }, paw: { position: "absolute", bottom: 3, right: 9, width: 25, height: 11, borderRadius: 9, backgroundColor: "#423D38" }, sleepMark: { position: "absolute", top: -2, right: 2, color: C.ginger, fontSize: 18, fontWeight: "600", transform: [{ rotate: "12deg" }] },
-  todayLine: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 14 }, todayTitle: { color: C.ink, fontFamily: labelFont, fontSize: 12, fontWeight: "700", letterSpacing: 0.8 }, demo: { color: C.muted, fontSize: 12 }, main: { gap: 24 }, mainWide: { flexDirection: "row-reverse", gap: 32 }, mapColumn: { minWidth: 0 }, mapWide: { flex: 1.2 }, needsColumn: { minWidth: 0 }, needsWide: { flex: 1, paddingTop: 6 },
-  colonyTabs: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingTop: 12 }, colonyTab: { paddingHorizontal: 10, minHeight: 48, justifyContent: "center", borderRadius: 3, borderWidth: 1, borderColor: C.line }, activeTab: { backgroundColor: C.panel, borderColor: C.ginger }, tabText: { color: C.muted, fontSize: 12 }, activeTabText: { color: C.ginger, fontWeight: "700" }, selection: { paddingTop: 12 }, selectionTop: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }, selectionTitle: { color: C.ink, fontWeight: "700", fontSize: 16 }, catCount: { color: C.slate, fontSize: 12 }, selectionNote: { color: C.muted, fontSize: 14, lineHeight: 21, marginTop: 8 },
-  sectionHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }, sectionTitle: { color: C.ink, fontFamily: displayFont, fontSize: 24, fontWeight: "900", letterSpacing: -0.8 }, needCount: { color: C.ink, fontFamily: labelFont, fontSize: 12, backgroundColor: "#F2C99D", paddingHorizontal: 9, paddingVertical: 6, fontWeight: "700" }, need: { flexDirection: "row", gap: 10, padding: 14, borderWidth: 1.5, borderColor: "#CDBDA9", borderBottomWidth: 4, backgroundColor: "#FFFDFA", borderRadius: 4, alignItems: "flex-start", marginBottom: 12 }, secondNeed: { paddingBottom: 12 }, needIcon: { width: 38, height: 42, borderRadius: 3, justifyContent: "center", alignItems: "center" }, iconText: { fontSize: 24, fontWeight: "800" }, needBody: { flex: 1 }, urgentLabel: { color: C.concern, fontSize: 10, letterSpacing: 1.1, fontWeight: "700", marginBottom: 5 }, needTitle: { color: C.ink, fontSize: 18, lineHeight: 23, fontWeight: "800" }, needMeta: { color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 4 }, identity: { color: C.slate, fontSize: 12, lineHeight: 18, marginTop: 9, backgroundColor: "#F1EAE0", alignSelf: "flex-start", paddingHorizontal: 6, paddingVertical: 3 }, smallNote: { color: C.muted, fontSize: 12, marginTop: 5 }, chevron: { color: C.muted, fontSize: 19 }, bowl: { width: 23, height: 13, borderWidth: 2, borderColor: C.ginger, borderBottomLeftRadius: 10, borderBottomRightRadius: 10 }, helper: { paddingTop: 8 }, helperText: { color: C.muted, fontSize: 13, lineHeight: 20 },
-  actionBar: { backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.line, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 6 }, actionInner: { width: "100%", maxWidth: 600, alignSelf: "center" }, report: { minHeight: 56, backgroundColor: "#EF9B59", borderRadius: 4, borderWidth: 2, borderBottomWidth: 5, borderColor: C.ink, flexDirection: "row", alignItems: "center", paddingHorizontal: 20, gap: 12 }, reportPlus: { color: C.ink, fontSize: 28, fontWeight: "400" }, reportText: { flex: 1, color: C.ink, fontFamily: displayFont, fontWeight: "900", fontSize: 16, letterSpacing: 0.5 }, reportArrow: { color: C.ink, fontSize: 23 }, actionHint: { color: C.muted, textAlign: "center", fontSize: 11, paddingTop: 7, paddingBottom: 2 }, pressed: { opacity: 0.72 }, reportPressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
+  safe: { flex: 1, backgroundColor: C.cream }, page: { width: "100%", maxWidth: 1060, alignSelf: "center", paddingHorizontal: 18, paddingBottom: 30 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 9, paddingBottom: 12 }, brand: { flexDirection: "row", gap: 10, alignItems: "center" }, brandName: { color: C.ink, fontSize: 29 }, menu: { flexDirection: "row", alignItems: "center", minHeight: 48, gap: 9 }, menuLabel: { color: C.ink, fontFamily: mono, fontSize: 11 }, menuSquare: { width: 32, height: 32, backgroundColor: C.ginger, justifyContent: "center", alignItems: "center", gap: 3 }, menuLine: { width: 13, height: 2, backgroundColor: C.ink },
+  columns: { gap: 30 }, columnsWide: { flexDirection: "row", gap: 44 }, listColumn: { minWidth: 0 }, listWide: { flex: 1, maxWidth: 470 }, mapColumn: { minWidth: 0 }, mapWide: { flex: 1, paddingTop: 28 },
+  hero: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 13, paddingBottom: 10 }, heroText: { flex: 1 }, heading: { color: C.ink, fontSize: 58, lineHeight: 48, letterSpacing: -0.7 }, largeTextHeading: { fontSize: 42, lineHeight: 42 }, orange: { color: C.orange }, heroArt: { width: 106, height: 116, alignItems: "center" }, heroCat: { width: 82, height: 82, marginTop: 9, borderRadius: 0 }, stairs: { position: "absolute", width: 66, height: 66, right: -3, top: 0 }, step: { position: "absolute", height: 22, width: 22, backgroundColor: C.ginger }, motionButton: { minHeight: 32, minWidth: 64, paddingHorizontal: 8, justifyContent: "center", alignItems: "center" }, motionText: { fontFamily: mono, fontSize: 9, color: C.muted },
+  purpose: { fontFamily: mono, color: C.muted, fontSize: 10, lineHeight: 16, letterSpacing: 0.2, marginBottom: 13 }, listMeta: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 8, paddingBottom: 9 }, meta: { fontFamily: mono, color: C.muted, fontSize: 10 }, fontNotice: { color: C.orange, fontSize: 12, marginBottom: 10 },
+  records: { gap: 8 }, record: { borderWidth: 1, borderColor: C.line, backgroundColor: C.paper, borderRadius: 2 }, recordButton: { flexDirection: "row", padding: 7, gap: 12, minHeight: 133, alignItems: "center" }, imageColumn: { width: "37%", alignSelf: "stretch", justifyContent: "center" }, imageFrame: { width: "100%", aspectRatio: 1, backgroundColor: "#EADCC5", overflow: "hidden" }, photo: { width: "100%", height: "100%" }, numberBadge: { position: "absolute", top: -8, left: -8, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: C.ginger, borderWidth: 1, borderColor: C.ink, borderRadius: 2 }, number: { fontSize: 20, color: C.ink }, illustrationLabel: { fontFamily: mono, fontSize: 7, color: C.muted, marginTop: 3 }, recordBody: { flex: 1, minWidth: 0, paddingVertical: 2 }, recordTitle: { fontSize: 26, lineHeight: 27, color: C.ink }, recordCategory: { fontFamily: mono, fontSize: 10, lineHeight: 16, color: C.ink, marginTop: 2 }, location: { fontSize: 11, lineHeight: 17, color: C.ink, marginTop: 5 }, recordBottom: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 6, marginTop: 7 }, tag: { flex: 1, paddingHorizontal: 5, paddingVertical: 4, borderWidth: 1, borderColor: "#CAA777", borderRadius: 2 }, reviewTag: { borderColor: "#B9876D" }, tagText: { fontSize: 9, lineHeight: 12, color: C.muted }, arrowSquare: { backgroundColor: C.ink, width: 29, height: 29, alignItems: "center", justifyContent: "center" }, arrow: { color: C.cream, fontSize: 22, lineHeight: 25 }, detail: { padding: 12, borderTopWidth: 1, borderTopColor: C.line }, detailText: { color: C.ink, fontSize: 14, lineHeight: 21 }, detailCaption: { color: C.muted, fontSize: 11, lineHeight: 16, marginTop: 6 },
+  art: { flex: 1, alignItems: "center", justifyContent: "center" }, bowlArt: { backgroundColor: "#ECD8B9" }, bowlRim: { width: "68%", height: 9, backgroundColor: C.ink, position: "absolute", top: "42%", zIndex: 2 }, bowl: { width: "60%", height: "30%", backgroundColor: C.ginger, borderWidth: 3, borderColor: C.ink, borderBottomLeftRadius: 20, borderBottomRightRadius: 20, marginTop: 12 }, bowlFoot: { position: "absolute", bottom: "21%", height: 4, width: "40%", backgroundColor: C.ink }, foodOne: { position: "absolute", top: "30%", left: "39%", width: 7, height: 7, backgroundColor: C.orange }, foodTwo: { position: "absolute", top: "26%", left: "54%", width: 7, height: 7, backgroundColor: C.orange }, colonyArt: { backgroundColor: "#E7E1CD" }, house: { width: "56%", height: "43%", backgroundColor: C.cream, borderWidth: 2, borderColor: C.ink, marginTop: 13 }, houseRoof: { position: "absolute", top: "20%", width: "49%", height: "39%", backgroundColor: C.ginger, transform: [{ rotate: "45deg" }] }, door: { position: "absolute", bottom: "23%", width: "13%", height: "22%", backgroundColor: C.ink }, houseWindow: { position: "absolute", top: "47%", right: "27%", width: 8, height: 8, backgroundColor: C.ginger },
+  report: { flexDirection: "row", minHeight: 57, marginTop: 18, backgroundColor: C.ink, borderWidth: 2, borderColor: C.ink, alignItems: "center" }, reportText: { flex: 1, color: C.cream, fontSize: 25, paddingHorizontal: 13, paddingVertical: 9 }, reportArrow: { minHeight: 53, width: 52, backgroundColor: C.ginger, justifyContent: "center", alignItems: "center", borderLeftWidth: 2, borderLeftColor: C.ink }, reportArrowText: { color: C.ink, fontSize: 30 }, receiptNote: { fontFamily: mono, fontSize: 10, color: C.muted, textAlign: "center", marginTop: 7 },
+  mapTitle: { color: C.ink, fontSize: 42, lineHeight: 37, marginBottom: 18 }, mapNote: { fontSize: 12, lineHeight: 18, color: C.muted, marginTop: 8 }, bottomBar: { borderTopWidth: 1, borderTopColor: C.line, backgroundColor: C.cream }, nav: { width: "100%", maxWidth: 470, alignSelf: "center", flexDirection: "row", paddingHorizontal: 12 }, navItem: { flex: 1, alignItems: "center", justifyContent: "center", gap: 7, minHeight: 68, paddingVertical: 10 }, navSelected: { backgroundColor: C.ginger }, navLabel: { color: C.ink, fontFamily: mono, fontSize: 8 }, pressed: { opacity: 0.7 },
 });
