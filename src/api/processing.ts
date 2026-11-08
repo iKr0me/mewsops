@@ -57,6 +57,7 @@ export function processor(
         503,
       );
     active.add(id);
+    let stage = "prepare";
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -68,6 +69,7 @@ export function processor(
         descriptions,
       );
       const validate = proposalGuard(input);
+      stage = "model";
       const deadline = new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
           controller.abort();
@@ -82,10 +84,14 @@ export function processor(
         ]),
       );
       validate(output);
+      stage = "apply";
       const currentActor = actorFromVerifiedSession(db, { userId: actor.id });
       services.applyAgentProposal(currentActor, output);
       return services.getReport(actor, id);
-    } catch {
+    } catch (error) {
+      // Record only a stage and safe error type; never log report text or images.
+      const kind = error instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,60}$/.test(error.name) ? error.name : "Error";
+      console.error("Tracker analysis failed", { stage, kind });
       db.prepare(
         "UPDATE reports SET status='failed' WHERE id=? AND status IN ('received','failed')",
       ).run(id);
