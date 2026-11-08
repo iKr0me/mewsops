@@ -8,7 +8,7 @@ export { trackerDescriptions };
 type AnalysisMode = "live" | "fixture" | "failed" | "unavailable";
 export interface TrackerInput {
   clientRequestId: string;
-  c: number;
+  c?: number;
   text: string;
   time: string;
   mediaIds: string[];
@@ -66,10 +66,13 @@ export function createTrackerStore(db: Db) {
 
   function submit(actor: Actor, input: TrackerInput) {
     const a = current(actor);
-    const location = trackerLocations[input.c];
-    if (!Number.isInteger(input.c) || !location) fail("VALIDATION", "Choose a fictional colony.");
+    // Phones can attach a known synthetic pin without selecting the colony a second time.
+    const location = input.demoLocationId !== undefined
+      ? trackerLocations.find(item => item.demoLocationId === input.demoLocationId)
+      : input.c === undefined ? undefined : trackerLocations[input.c];
+    if (!location) fail("VALIDATION", "Choose a fictional colony or share a recognized demo location.");
     scope(a, location.id);
-    if (input.demoLocationId !== undefined && input.demoLocationId !== location.demoLocationId)
+    if (input.c !== undefined && input.c !== location.c)
       fail("VALIDATION", "The shared location does not match the selected colony.");
     return db.transaction(() => {
       const report = services.submitReport(a, {

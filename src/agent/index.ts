@@ -265,6 +265,7 @@ function toAgentInput(input: AnalyzeReportInput) {
     },
   ];
   for (const image of input.images) {
+    content.push({ type: "input_text", text: JSON.stringify({ followingImageEvidenceId: image.evidenceId }) });
     content.push({
       type: "input_image",
       image: `data:image/png;base64,${image.dataBase64}`,

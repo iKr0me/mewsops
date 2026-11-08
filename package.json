@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "tracker": "node --import tsx scripts/tracker.ts",
     "dev": "tsx src/index.ts",
     "demo": "tsx src/index.ts --demo",
     "typecheck": "tsc --noEmit",

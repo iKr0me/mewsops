@@ -15,7 +15,7 @@ export type TrackerOptions = {
 const id = z.string().trim().min(1).max(200);
 const submission = z.object({
   clientRequestId: id,
-  c: z.number().int().nonnegative(),
+  c: z.number().int().nonnegative().optional(),
   text: z.string().trim().min(1).max(20_000),
   time: z.string().max(30),
   mediaIds: z.array(id).max(10),

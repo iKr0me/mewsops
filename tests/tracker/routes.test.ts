@@ -54,6 +54,20 @@ const report = {
   text: "Fed the colony. The calico is limping.", mediaIds: [], demoLocationId: "demo-location-1",
 };
 
+it("routes a shared fictional pin to the assigned colony and rejects conflicting or unauthorized pins", async () => {
+  const { db, req } = await tracker();
+  const pinReport = { ...report, c: undefined, demoLocationId: "demo-location-2" };
+  const response = await req("/tracker/reports", "luz", pinReport);
+  expect(response.status).toBe(201);
+  const { reportId } = await response.json();
+  expect(db.prepare("SELECT selected_colony_id FROM reports WHERE id=?").get(reportId))
+    .toEqual({ selected_colony_id: "colony-2" });
+  expect((await req("/tracker/reports", "luz", { ...pinReport, c: 0 })).status).toBe(400);
+  expect((await req("/tracker/reports", "luz", { ...pinReport, demoLocationId: "unknown" })).status).toBe(400);
+  db.prepare("DELETE FROM colony_assignments WHERE user_id='nico' AND colony_id='colony-2'").run();
+  expect((await req("/tracker/reports", "nico", pinReport)).status).toBe(403);
+});
+
 it("persists a scoped report even when analysis fails, allowing staff retry without duplicate runs", async () => {
   let attempts = 0;
   const { db, req } = await tracker(async (input, dependencies) => {
