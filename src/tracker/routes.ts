@@ -10,6 +10,7 @@ export type TrackerOptions = {
   analysisMode: "manual" | "fixture" | "live";
   /** A server-provisioned identity permitted to process reports for this rescue. */
   processorUserId: string;
+  awaitAnalysis?: boolean;
 };
 
 const id = z.string().trim().min(1).max(200);
@@ -80,6 +81,7 @@ export function createTrackerRoutes(
     if (path === "/api/tracker/reports") {
       const report = store.submit(actor, submission.parse(await readJson(req)));
       schedule(report.id, report.status);
+      if (config.awaitAnalysis) await running.get(report.id);
       return reply({ reportId: report.id, state: store.state(actor) }, 201);
     }
     staff(actor);
@@ -97,6 +99,7 @@ export function createTrackerRoutes(
       await emptyAction(req);
       const report = services.getReport(actor, retry[1]);
       schedule(report.id, report.status);
+      if (config.awaitAnalysis) await running.get(report.id);
       return reply({ reportId: report.id, state: store.state(actor) }, 202);
     }
     const issue = /^\/api\/tracker\/issues\/([^/]+)\/(claim|resolve)$/.exec(path);

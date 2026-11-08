@@ -1,5 +1,24 @@
 import type { Db } from "./types.js";
 import Database from "better-sqlite3";
+import { isRemoteDatabase } from "./remote.js";
+const cloudAuditGuard = "CREATE TRIGGER cloud_no_audit_replace BEFORE INSERT ON audit_events WHEN EXISTS (SELECT 1 FROM audit_events WHERE id=NEW.id) BEGIN SELECT RAISE(ABORT,'Audit events are append only'); END";
+// Hosted libSQL formats SQL in sqlite_master. Ignore formatting whitespace,
+// preserving quoted text so trigger conditions and error strings stay exact.
+function structuralSql(sql: string): string {
+  let result = "", quote = "";
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    if (quote) {
+      result += ch;
+      if (ch === quote) {
+        if (sql[i + 1] === quote) result += sql[++i];
+        else quote = "";
+      }
+    } else if (ch === "'" || ch === '"' || ch === "`") { quote = ch; result += ch; }
+    else if (!/\s/.test(ch)) result += ch.toUpperCase();
+  }
+  return result;
+}
 export const schemaV1 = `
 CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('staff','volunteer')), available INTEGER NOT NULL DEFAULT 1 CHECK(available IN (0,1)));
 CREATE TABLE colonies (id TEXT PRIMARY KEY, name TEXT NOT NULL, location_label TEXT NOT NULL, exact_location TEXT);
@@ -28,10 +47,11 @@ CREATE TRIGGER no_audit_update BEFORE UPDATE ON audit_events BEGIN SELECT RAISE(
 CREATE TRIGGER no_audit_delete BEFORE DELETE ON audit_events BEGIN SELECT RAISE(ABORT,'Audit events are append only'); END;
 `;
 export function migrate(db: Db): void {
+  const remote = isRemoteDatabase(db);
   const verifyIntegrity = () => {
     if (db.pragma("foreign_keys", { simple: true }) !== 1)
       throw new Error("Database integrity failure: foreign keys are disabled");
-    if (db.pragma("recursive_triggers", { simple: true }) !== 1)
+    if (!remote && db.pragma("recursive_triggers", { simple: true }) !== 1)
       throw new Error("Database integrity failure: recursive triggers are disabled");
     // Compare actual definitions to a fresh database created by this version.
     // Checking names or fragments alone can accept disabled triggers or non-unique indexes.
@@ -39,13 +59,14 @@ export function migrate(db: Db): void {
     try {
       expected.exec(schemaV1);
       expected.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
+      if (remote) expected.exec(cloudAuditGuard);
       if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='demo_seed'").get())
         expected.exec("CREATE TABLE IF NOT EXISTS demo_seed (id TEXT PRIMARY KEY)");
       const objects = expected.prepare("SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'").all() as {type:string;name:string;sql:string}[];
       const getActual = db.prepare("SELECT sql FROM sqlite_master WHERE type=? AND name=?");
       for (const object of objects) {
         const actual = getActual.get(object.type, object.name) as {sql:string}|undefined;
-        if (!actual || actual.sql !== object.sql)
+        if (!actual || (remote ? structuralSql(actual.sql) !== structuralSql(object.sql) : actual.sql !== object.sql))
           throw new Error(`Incompatible schema: missing or altered ${object.type} ${object.name}`);
       }
       const expectedNames = new Set(objects.map(object => `${object.type}:${object.name}`));
@@ -68,7 +89,7 @@ export function migrate(db: Db): void {
     };
     for (const [name, fragments] of Object.entries(requiredTriggers)) {
       const row = db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?").get(name) as { sql: string } | undefined;
-      if (!row || fragments.some((fragment) => !row.sql.toUpperCase().includes(fragment.toUpperCase())))
+      if (!row || fragments.some((fragment) => remote ? !structuralSql(row.sql).includes(structuralSql(fragment)) : !row.sql.toUpperCase().includes(fragment.toUpperCase())))
         throw new Error(`Incompatible schema: missing or altered trigger ${name}`);
     }
     const requiredIndexes: Record<string, string> = {
@@ -77,7 +98,7 @@ export function migrate(db: Db): void {
     };
     for (const [name, predicate] of Object.entries(requiredIndexes)) {
       const row = db.prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name=?").get(name) as { sql: string } | undefined;
-      if (!row || !row.sql.replace(/\\s+/g, "").toUpperCase().includes(predicate.replace(/\\s+/g, "").toUpperCase()))
+      if (!row || (remote ? !structuralSql(row.sql).includes(structuralSql(predicate)) : !row.sql.replace(/\\s+/g, "").toUpperCase().includes(predicate.replace(/\\s+/g, "").toUpperCase())))
         throw new Error(`Incompatible schema: missing or altered index ${name}`);
     }
     const integrity = db.prepare("PRAGMA integrity_check").get() as { integrity_check: string };
@@ -138,6 +159,7 @@ export function migrate(db: Db): void {
     }
     if (!versions.some((v) => v.version === 1)) {
       db.exec(schemaV1);
+      if (remote) db.exec(cloudAuditGuard);
       db.prepare("INSERT INTO schema_migrations VALUES (?,?)").run(
         1,
         "2026-11-07T00:00:00.000Z",

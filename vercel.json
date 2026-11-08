@@ -1,0 +1,10 @@
+{
+  "installCommand": "npm ci && npm ci --prefix src/api",
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 120,
+      "includeFiles": "mobile/{web,host}/**"
+    }
+  },
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
+}

@@ -1,11 +1,14 @@
 import type { Db, Tables, Cat } from "./types.js";
+const columnCache = new WeakMap<Db, Map<string, Set<string>>>();
 export function repositories(db: Db) {
   function table<K extends keyof Tables>(name: K) {
-    const columns = new Set(
-      (
-        db.prepare(`PRAGMA table_info(${name})`).all() as { name: string }[]
-      ).map((c) => c.name),
-    );
+    let cache = columnCache.get(db);
+    if (!cache) { cache = new Map(); columnCache.set(db, cache); }
+    let columns = cache.get(name);
+    if (!columns) {
+      columns = new Set((db.prepare(`PRAGMA table_info(${name})`).all() as { name: string }[]).map((c) => c.name));
+      cache.set(name, columns);
+    }
     return {
       get: (id: string) =>
         db.prepare(`SELECT * FROM ${name} WHERE id=?`).get(id) as
@@ -18,8 +21,8 @@ export function repositories(db: Db) {
         if (keys.some((k) => !columns.has(k)))
           throw new Error("Unknown column");
         db.prepare(
-          `INSERT INTO ${name} (${keys.join(",")}) VALUES (${keys.map((k) => "@" + k).join(",")})`,
-        ).run(row);
+          `INSERT INTO ${name} (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`,
+        ).run(...keys.map((key) => row[key as keyof typeof row]));
       },
     };
   }

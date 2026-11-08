@@ -210,8 +210,8 @@ export function createSqlitePort(db: Db): DomainPort {
   function insert(table: string, row: Record<string, unknown>) {
     const keys = Object.keys(row);
     db.prepare(
-      `INSERT INTO ${table} (${keys.join(",")}) VALUES (${keys.map((k) => "@" + k).join(",")})`,
-    ).run(row);
+      `INSERT INTO ${table} (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`,
+    ).run(...keys.map(key => row[key]));
   }
   const port: DomainPort = {
     transaction: (work) => db.transaction(work).immediate(),
