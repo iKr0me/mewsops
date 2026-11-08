@@ -8,5 +8,7 @@ node_modules/
 *.db-journal
 storage/uploads/
 storage/tracker*/
+storage/cloud-demo-codes.json
 dist/
 .DS_Store
+.vercel

@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
 import { repositories, type Db } from "../db/index.js";
 import { fail, type Actor } from "../domain/types.js";
 import { createServices } from "../domain/index.js";
+import { put, get, del } from "@vercel/blob";
 
 const png = Buffer.from("89504e470d0a1a0a", "hex");
 export const maxUpload = 5 * 1024 * 1024;
@@ -44,6 +45,28 @@ export async function saveMedia(
   const sha256 = createHash("sha256").update(body).digest("hex");
   const filename = sha256 + ".png";
   const id = randomUUID();
+  if (dir === "__blob__") {
+    const blob = await put(`tracker/${id}.png`, clean, {
+      access: "private", contentType: "image/png", addRandomSuffix: false,
+    });
+    try {
+      repositories(db).media.insert({ id, uploaded_by: actor.id, report_id: null,
+        storage_ref: filename, sha256, available: 1, created_at: new Date().toISOString() });
+    } catch (error) {
+      await del(blob.url).catch(() => {});
+      throw error;
+    }
+    return { id, contentType: "image/png" };
+  }
+  if (dir === "__database__") {
+    db.exec("CREATE TABLE IF NOT EXISTS tracker_media_content (id TEXT PRIMARY KEY, bytes BLOB NOT NULL)");
+    db.transaction(() => {
+      db.prepare("INSERT INTO tracker_media_content (id, bytes) VALUES (?, ?)").run(id, clean);
+      repositories(db).media.insert({ id, uploaded_by: actor.id, report_id: null,
+        storage_ref: filename, sha256, available: 1, created_at: new Date().toISOString() });
+    })();
+    return { id, contentType: "image/png" };
+  }
   await mkdir(dir, { recursive: true });
   const temp = join(dir, id + ".tmp");
   try {
@@ -72,6 +95,17 @@ export async function loadMedia(db: Db, dir: string, actor: Actor, id: string) {
   if (row.report_id) createServices(db).getReport(actor, row.report_id);
   if (!row.available || !/^[0-9a-f]{64}\.png$/.test(row.storage_ref))
     return fail("UNAVAILABLE", "Media unavailable", 503);
+  if (dir === "__blob__") {
+    const result = await get(`tracker/${id}.png`, { access: "private" });
+    if (!result || result.statusCode !== 200 || !result.stream)
+      return fail("UNAVAILABLE", "Media unavailable", 503);
+    return Buffer.from(await new Response(result.stream).arrayBuffer());
+  }
+  if (dir === "__database__") {
+    const stored = db.prepare("SELECT bytes FROM tracker_media_content WHERE id=?").get(id) as {bytes: Uint8Array} | undefined;
+    if (!stored) return fail("UNAVAILABLE", "Media unavailable", 503);
+    return Buffer.from(stored.bytes);
+  }
   try {
     return await readFile(join(dir, row.storage_ref));
   } catch {

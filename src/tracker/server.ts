@@ -25,11 +25,11 @@ function redirect(res: ServerResponse, path: string) {
   res.end();
 }
 
-export function createConnectedTracker(db: Db, uploadDir: string, analysisMode: AnalysisMode, analyzeReport?: AnalyzeReport) {
-  const sessions = createTrackerSessions();
+export function createConnectedTracker(db: Db, uploadDir: string, analysisMode: AnalysisMode, analyzeReport?: AnalyzeReport, options?: { sessions?: ReturnType<typeof createTrackerSessions>; awaitAnalysis?: boolean }) {
+  const sessions = options?.sessions ?? createTrackerSessions();
   const api = createApiServer({
     db, uploadDir, analyzeReport, vettedDemoDescriptions: trackerDescriptions,
-    tracker: { analysisMode, processorUserId: "beatriz" }, timeoutMs: 45000,
+    tracker: { analysisMode, processorUserId: "beatriz", awaitAnalysis: options?.awaitAnalysis }, timeoutMs: 45000,
     verifiedSubject: async req => sessions.get(req),
   });
   async function handle(req: IncomingMessage, res: ServerResponse) {

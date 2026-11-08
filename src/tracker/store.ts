@@ -98,7 +98,7 @@ export function createTrackerStore(db: Db) {
 
   function state(actor: Actor) {
     const a = current(actor);
-    const visibleIds = new Set(services.listColonies(a).map(c => c.id));
+    const visibleIds = new Set(r.colonies.list().filter(c => a.role === "staff" || a.assignedColonyIds.includes(c.id)).map(c => c.id));
     const locations = trackerLocations.filter(l => visibleIds.has(l.id));
     const members = new Map(r.users.list().map(u => [u.id, u.name]));
     const visits = r.feeding_visits.list().filter(v => visibleIds.has(v.colony_id)).sort((x, y) => y.occurred_at.localeCompare(x.occurred_at));
@@ -108,11 +108,24 @@ export function createTrackerStore(db: Db) {
     const allReports = r.reports.list().filter(report => report.selected_colony_id && visibleIds.has(report.selected_colony_id));
     const visibleReports = allReports.filter(report => a.role === "staff" || report.actor_id === a.id);
     const reportsById = new Map(allReports.map(report => [report.id, report]));
+    const aliases = new Map(r.merge_aliases.list().filter(alias => !alias.reversed_at).map(alias => [alias.alias_cat_id, alias.canonical_cat_id]));
+    function canonical(id: string): string {
+      const seen = new Set<string>();
+      while (aliases.has(id)) {
+        if (seen.has(id)) throw new Error("Invalid cat alias cycle");
+        seen.add(id);
+        id = aliases.get(id)!;
+      }
+      return id;
+    }
     const eligibleCats = r.cats.list().filter(cat => visibleIds.has(cat.colony_id));
-    const allCats = eligibleCats.filter(cat => cat.identity_confirmed && cat.lifecycle === "active" && r.cats.canonicalId(cat.id) === cat.id);
-    const recordedVet = new Set(eligibleCats.filter(cat => cat.vet_review_status === "needed").map(cat => r.cats.canonicalId(cat.id)));
+    const allCats = eligibleCats.filter(cat => cat.identity_confirmed && cat.lifecycle === "active" && canonical(cat.id) === cat.id);
+    const recordedVet = new Set(eligibleCats.filter(cat => cat.vet_review_status === "needed").map(cat => canonical(cat.id)));
     const openInjuryReports = new Set(allAlerts.filter(alert => alert.status === "open" && concernTitle(alert.reasons) === "Needs vet attention").map(alert => alert.report_id));
-    const reportedVet = new Set(r.observations.list().filter(obs => obs.cat_id && openInjuryReports.has(obs.report_id)).map(obs => r.cats.canonicalId(obs.cat_id!)));
+    const observations = r.observations.list();
+    const media = r.media.list();
+    const reviews = a.role === "staff" ? r.review_requests.list() : [];
+    const reportedVet = new Set(observations.filter(obs => obs.cat_id && openInjuryReports.has(obs.report_id)).map(obs => canonical(obs.cat_id!)));
     const cats = allCats.map(cat => ({
       id: cat.id, c: trackerLocations.find(l => l.id === cat.colony_id)!.c,
       name: cat.name, sterilization: cat.sterilization, vet: recordedVet.has(cat.id) || reportedVet.has(cat.id),
@@ -120,32 +133,33 @@ export function createTrackerStore(db: Db) {
       ...(cat.id === "marigold" && {photo:"/api/tracker/reference/marigold", description:trackerDescriptions.get(cat.id)}),
     }));
     const colonies = locations.map(location => {
-      const summary = services.getColonySummary(a, location.id);
+      const colonyCats = allCats.filter(cat => cat.colony_id === location.id);
       const lastVisit = visits.find(v => v.colony_id === location.id);
-      return {...location, total:summary.confirmedCats, fixed:summary.fixed, tnr:summary.tnrNeeded,
-        unknown:summary.tnrUnknown, vet:cats.filter(cat => cat.c === location.c && cat.vet).length,
-        recordedVetNeeds:summary.vetReviewNeeded, lastFedAt:summary.lastFeedingAt,
+      return {...location, total:colonyCats.length, fixed:colonyCats.filter(cat => cat.sterilization === "fixed").length,
+        tnr:colonyCats.filter(cat => cat.sterilization === "not_fixed").length,
+        unknown:colonyCats.filter(cat => cat.sterilization === "unknown").length, vet:cats.filter(cat => cat.c === location.c && cat.vet).length,
+        recordedVetNeeds:colonyCats.filter(cat => recordedVet.has(cat.id)).length, lastFedAt:lastVisit?.occurred_at ?? null,
         lastFeeder:lastVisit ? members.get(lastVisit.feeder_id) ?? null : null};
     });
     const reports = visibleReports.map(record => {
-      const report = services.getReport(a, record.id);
-      const c = trackerLocations.find(l => l.id === report.colonyId)!.c;
-      const linked = report.observations.find(o => o.catId);
-      const catId = linked?.catId ? r.cats.canonicalId(linked.catId) : undefined;
-      const pending = report.reviews.filter(review => review.status === "pending" && review.action === "link_observation");
-      const suggestions = [...new Set(pending.flatMap(candidateIds))];
-      const photo = report.mediaIds[0];
+      const c = trackerLocations.find(l => l.id === record.selected_colony_id)!.c;
+      const linked = observations.find(o => o.report_id === record.id && o.cat_id);
+      const catId = linked?.cat_id ? canonical(linked.cat_id) : undefined;
+      const pending = reviews.filter(review => review.report_id === record.id && review.status === "pending" && review.action === "link_observation");
+      const suggestions = [...new Set(pending.flatMap(review => candidateIds({ proposedChange: JSON.parse(review.proposed_change) } as Review)))];
+      const mediaIds = media.filter(item => item.report_id === record.id).map(item => item.id).sort();
+      const photo = mediaIds[0];
       const mode = modes.get(record.id);
       return {
-        id:record.id, c, text:report.text, by:members.get(report.actorId)!, time:report.observedAt ?? report.receivedAt,
-        submitted:report.receivedAt, fed:visits.some(v => v.report_id === record.id),
+        id:record.id, c, text:record.text, by:members.get(record.actor_id)!, time:record.observed_at ?? record.received_at,
+        submitted:record.received_at, fed:visits.some(v => v.report_id === record.id),
         vet:allAlerts.some(alert => alert.report_id === record.id && concernTitle(alert.reasons) === "Needs vet attention"),
-        calico:c === 0 && Boolean(photo) && (/\bcalico\b/i.test(report.text) || catId === "marigold" || suggestions.includes("marigold")),
-        ...(catId && {catId, cat:r.cats.get(catId)?.name}),
-        ...(photo && {photo:`/api/media/${encodeURIComponent(photo)}`}), mediaIds:report.mediaIds,
-        status:report.status, mode:mode ?? (record.client_request_id.startsWith("tracker-") && record.id.startsWith("tracker-") ? "seed" : "pending"),
-        reviewable:a.role === "staff" && report.mediaIds.length === 1 && !catId && c === 0, candidateIds:suggestions,
-        demoLocationId:report.demoLocationId,
+        calico:c === 0 && Boolean(photo) && (/\bcalico\b/i.test(record.text) || catId === "marigold" || suggestions.includes("marigold")),
+        ...(catId && {catId, cat:eligibleCats.find(cat => cat.id === catId)?.name}),
+        ...(photo && {photo:`/api/media/${encodeURIComponent(photo)}`}), mediaIds,
+        status:record.status, mode:mode ?? (record.client_request_id.startsWith("tracker-") && record.id.startsWith("tracker-") ? "seed" : "pending"),
+        reviewable:a.role === "staff" && mediaIds.length === 1 && !catId && c === 0, candidateIds:suggestions,
+        demoLocationId:record.demo_location_id ?? undefined,
       };
     }).sort((x,y) => y.submitted.localeCompare(x.submitted) || y.id.localeCompare(x.id));
     const issues = allAlerts.map(alert => {
