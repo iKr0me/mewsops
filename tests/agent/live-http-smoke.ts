@@ -63,12 +63,13 @@ const reporterObservations = processed.observations.filter(
     observation.evidenceIds?.includes(report.id),
 );
 if (!reporterObservations.length)
-  throw new Error("Live API result had no reporter observation tied to the report ID");
+  throw new Error("API adapter result had no reporter observation tied to the report ID");
 
 console.log(
   JSON.stringify(
     {
-      run: "live Agents SDK through Teammate 4 API adapter",
+      run: "HTTP agent adapter integration smoke",
+      inferenceVerification: "Not established by this smoke: adapter health and reporter observations also pass in fixture mode. Use the direct live smoke and server configuration to verify live inference separately.",
       health: health.analysis,
       reportId: report.id,
       reportStatus: processed.status,

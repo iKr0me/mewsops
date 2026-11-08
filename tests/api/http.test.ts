@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import type { AddressInfo } from "node:net";
 import { createApiServer } from "../../src/app.js";
+import { analyzeReport } from "../../src/agent/index.js";
 import { createDatabase, migrate, seedDemo } from "../../src/db/index.js";
 import {
   syntheticFixture,
@@ -356,7 +357,9 @@ it("keeps full private evidence when an uploaded JPEG expands beyond the agent P
   let captured: Parameters<AnalyzeReport>[0] | undefined;
   const { req, url, login } = await app(async (report, deps) => {
     captured = report;
-    return syntheticFixture(report, deps);
+    // Exercise the real agent lane's parser and scoped-output validation,
+    // without network inference or credentials.
+    return analyzeReport(report, { ...deps, mode: "fixture" });
   });
   const volunteer = await login("volunteer"),
     staff = await login("staff");
@@ -385,6 +388,34 @@ it("keeps full private evidence when an uploaded JPEG expands beyond the agent P
   expect(
     (await sharp(Buffer.from(image.dataBase64, "base64")).metadata()).format,
   ).toBe("png");
+});
+
+it("retries a saved urgent report through the actual agent module without duplicating observations", async () => {
+  let attempts = 0;
+  const { req, login } = await app(async (report, deps) => {
+    attempts += 1;
+    if (attempts === 1) throw new Error("Simulated provider outage");
+    return analyzeReport(report, { ...deps, mode: "fixture" });
+  });
+  const volunteer = await login("volunteer");
+  const staff = await login("staff");
+  const { data: report } = await (await req("/reports", volunteer, input)).json();
+  const path = "/reports/" + report.id;
+  expect((await req(path + "/process", volunteer, undefined, "POST")).status).toBe(403);
+  expect((await req(path + "/process", staff, undefined, "POST")).status).toBe(503);
+  const { data: failed } = await (await req(path, staff)).json();
+  expect(failed.status).toBe("failed");
+  expect(failed.alerts.some((a: { level: string }) => a.level === "same_day_review")).toBe(true);
+  const retry = await req(path + "/process", staff, undefined, "POST");
+  expect(retry.status).toBe(200);
+  const { data: processed } = await retry.json();
+  expect(processed.observations).toHaveLength(1);
+  expect(processed.observations[0].evidenceIds).toContain(report.id);
+  expect(processed.reviews).toEqual([]);
+  expect(processed.alerts.some((a: { level: string }) => a.level === "same_day_review")).toBe(true);
+  const { data: repeated } = await (await req(path + "/process", staff, undefined, "POST")).json();
+  expect(repeated).toEqual(processed);
+  expect(attempts).toBe(2);
 });
 
 it.each([false, true])(
